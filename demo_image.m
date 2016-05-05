@@ -20,11 +20,11 @@ pb = fb(1:2,m(1:k,2));
 figure(1);
 subplot 121;
 imshow(im1);
-hold on 
+hold on
 plot(pa(1,:),pa(2,:),'r*');
 subplot 122;
 imshow(im2);
-hold on 
+hold on
 plot(pb(1,:),pb(2,:),'r*');
 %}
 %-------caculate rotate angle
@@ -34,7 +34,8 @@ bias = [0.0;0.0]; % biasx, biasy
 step = 1e-3;
 batchsize = size(pa,2);
 % s.*pa*rotate .+ b = pb
-meand = mean(pb,2) - mean(pa,2);
+mean1 = mean(pa,2);
+mean2 = mean(pb,2);
 pa = bsxfun(@minus,pa,mean(pa,2));
 pb = bsxfun(@minus,pb,mean(pb,2));
 
@@ -53,17 +54,35 @@ for i=1:20
     b_gradient = sum(dy,2);
     s_gradient = sum(sum(rotate*pa.*dy));
     a_gradient = sum(sum(scale.*drotate*pa.*dy));
-    bias = bias - 2*step*b_gradient./batchsize;
+    bias = bias - 10*step*b_gradient./batchsize;
     scale = scale - step*s_gradient./batchsize;
     angle = angle - step*a_gradient./batchsize;
 end
 
-[hh,ww,~] = size(I1);
-im1_r = imresize(I1,scale); %enlarge
-im1_b = imrotate(im1_r,-angle/pi*180,'bicubic','crop'); % rotate angle
-im1_b = move_image(im1_b,bias); % move bias
-im1_b = move_image(im1_b,meand); % move 
-output = imresize(im1_b,[hh,ww]);
+[hh,ww,c] = size(I1);
+
+%padding image
+maxh = max(hh-mean1(2),mean1(2));
+maxw = max(ww-mean1(1),mean1(1));
+pad = ceil(max(maxh,maxw))+hh; % more pad 100 pixel
+I_padded = zeros(pad*2,pad*2,c,'single'); %produce a bigger image
+start_h = round(max(1,pad-mean1(2)+1));
+start_w = round(max(1,pad-mean1(1)+1));
+I_padded(start_h:start_h+hh-1,start_w:start_w+ww-1,:) = I1;
+I_rotated = imrotate(I_padded, -angle/pi*180, 'crop');
+I_scale = imresize(I_rotated,scale);
+[x,y,~] = size(I_scale);
+xcenter = (x+1)/2;
+ycenter = (y+1)/2;
+%imshow(I_scale);
+%hold on; plot(xcenter,ycenter,'*');
+
+crop_x = xcenter - mean2(2);
+crop_y = ycenter - mean2(1);
+I_cut = I_scale(round(crop_x):round(crop_x+hh),...
+        round(crop_y):round(crop_y+ww),:);
+I_cut = imresize(I_cut,[hh,ww]);
+imshow(I_cut);
 
 figure(1);
 subplot(131);
@@ -71,9 +90,11 @@ imshow(I1);
 title('Image1');
 subplot(132);
 imshow(I2);
+hold on;plot(mean2(1),mean2(2),'r*');
 title('Image2');
 subplot(133);
-imshow(output);
+imshow(I_cut);
+hold on;plot(mean2(1),mean2(2),'r*');
 title('Image1m');
 
 
